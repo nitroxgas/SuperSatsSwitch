@@ -1,7 +1,7 @@
 // #define ESP_DRD_USE_SPIFFS true
 
 #include <ESP8266WiFi.h>
-#include <FS.h>
+#include <LittleFS.h>
 #include <WiFiManager.h>
 #include <ArduinoJson.h>
 #include "wManager.h"
@@ -34,7 +34,7 @@ void saveConfigFile()
   json["gmtZone"] = GMTzone;
 
   // Open config file
-  File configFile = SPIFFS.open(JSON_CONFIG_FILE, "w");
+  File configFile = LittleFS.open(JSON_CONFIG_FILE, "w");
   if (!configFile)
   {
     // Error, file did not open
@@ -62,14 +62,14 @@ bool loadConfigFile()
   Serial.println("Mounting File System...");
 
   // May need to make it begin(true) first time you are using SPIFFS
-  if (SPIFFS.begin() || SPIFFS.begin())
+  if (LittleFS.begin() || LittleFS.begin())
   {
     Serial.println("mounted file system");
-    if (SPIFFS.exists(JSON_CONFIG_FILE))
+    if (LittleFS.exists(JSON_CONFIG_FILE))
     {
       // The file exists, reading and loading
       Serial.println("reading config file");
-      File configFile = SPIFFS.open(JSON_CONFIG_FILE, "r");
+      File configFile = LittleFS.open(JSON_CONFIG_FILE, "r");
       if (configFile)
       {
         Serial.println("Opened configuration file");
@@ -263,7 +263,7 @@ void init_WifiManager()
 void reset_configurations() {
   Serial.println("Erasing Config, restarting");
   wm.resetSettings();
-  SPIFFS.remove(JSON_CONFIG_FILE); //Borramos fichero
+  LittleFS.remove(JSON_CONFIG_FILE); //Borramos fichero
   ESP.restart();
 }
 
