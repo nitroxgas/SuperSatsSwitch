@@ -4,10 +4,11 @@ As you get satoshis from the audience, you may turn on anything you want, includ
 
 TO-DO:
 > Implement the code. B'p
-
-> Join us! <a href="https://t.me/makerbits">t.me/makerbits</a>
+> Finish the install instructions
 
 ### Includes portal for easy setup and retail
+-
+-
 
 ### Install instructions
 
@@ -15,3 +16,8 @@ TO-DO:
 - 
 - 
 - 
+
+### Heavily inspired by:
+
+- <a href="https://github.com/lnbits/bitcoinswitch">Bitcoin Switch</a>
+- <a href="https://github.com/BitMaker-hub/NerdMiner_v2">NerdMinerV2</a>
