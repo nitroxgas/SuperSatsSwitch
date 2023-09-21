@@ -17,6 +17,16 @@ char poolString[80] = "public-pool.io";
 int portNumber = 21496;//3333;
 char btcString[80] = "yourBtcAddress";
 int GMTzone = -3; //Currently selected in Brazil
+int relay1Sats = 100;
+int relay2Sats = 2000;
+int relay1pulses = 1;
+int relay2pulses = 0;
+int relay1timeS = 5;
+int relay2timeS = 15;
+char wsAPIKey[30] = "";
+
+
+
 
 // Define WiFiManager Object
 WiFiManager wm;
@@ -147,7 +157,7 @@ void init_WifiManager()
   //wm.resetSettings();
 
   //Set dark theme
-  //wm.setClass("invert"); // dark theme
+  wm.setClass("invert"); // dark theme
   
   // Set config save notify callback
   wm.setSaveConfigCallback(saveConfigCallback);
@@ -175,7 +185,7 @@ void init_WifiManager()
   // Text box (Number) - 2 characters maximum
   char charZone[6];
   sprintf(charZone, "%d", GMTzone); 
-  WiFiManagerParameter time_text_box_num("TimeZone", "TimeZone fromUTC (-12/+12)", charZone, 3); 
+  WiFiManagerParameter time_text_box_num("TimeZone", "TimeZone fromUTC (-12/+12)", charZone, 3);
 
   // Add all defined parameters
   wm.addParameter(&pool_text_box);
@@ -190,6 +200,7 @@ void init_WifiManager()
     //No configuramos timeout al modulo
     //wm.setConfigPortalBlocking(true); //Hacemos que el portal SI bloquee el firmware
     //drawSetupScreen();
+    
     if (!wm.startConfigPortal("SuperSatsSwitch","MineYourCoins"))
     {
       Serial.println("failed to connect and hit timeout");
