@@ -5,6 +5,12 @@
 #include <WebSocketsClient.h> 
 #include <ArduinoJson.h> 
 #include <ESP8266HTTPClient.h>
+#include "wManager.h"
+
+#ifdef PIN_BUTTON_1
+  #include  <OneButton.h>
+  OneButton button1(PIN_BUTTON_1);
+#endif
 
 #define PARAM_FILE "/elements.json"
 
@@ -115,80 +121,6 @@ String getValue(String data, char separator, int index)
     return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
 }
 
-bool readFiles() {        //true = success, false = fail
-  Serial.print(F("Opening config file... "));
-  File paramFile = LittleFS.open(PARAM_FILE, "r");
-  if (!paramFile) {
-    Serial.println(F("NOT FOUND!"));
-    return false;
-  }
-  Serial.println(F("DONE!"));
-
-  Serial.print(F("Parsing json config... "));
-  StaticJsonDocument<1500> doc;
-  DeserializationError error = deserializeJson(doc, paramFile);
-  if (error) {
-    Serial.println(F("ERROR!"));
-    return false;
-  }
-  Serial.println(F("DONE!"));
-
-  const JsonObject maRoot1 = doc[1];
-  const char *maRoot1Char = maRoot1["value"];
-  ssid = maRoot1Char;
-  if (ssid.length() == 0) {
-    Serial.println(F("Fatal: No SSID found in config!"));
-    return false;
-  }
-  Serial.print(F("SSID: "));
-  Serial.println(ssid);
-
-  const JsonObject maRoot2 = doc[2];
-  const char *maRoot2Char = maRoot2["value"];
-  wifiPassword = maRoot2Char;
-  Serial.print(F("WiFi password: "));
-  Serial.println(wifiPassword);
-
-  const JsonObject maRoot3 = doc[3];
-  const char *maRoot3Char = maRoot3["value"];
-  serverFull = maRoot3Char;
-  if (serverFull.length() == 0) {
-    Serial.println(F("Fatal: No websocket adddess found in config!"));
-    return false;
-  }
-  Serial.print(F("Websocket adddess: "));
-  Serial.println(serverFull);
-
-  lnbitsWSApiURL = serverFull.substring(serverFull.indexOf("/", 5), serverFull.lastIndexOf("/")+1);
-  Serial.print(F("WS Api URL: "));
-  Serial.println(lnbitsWSApiURL);
-
-  lnbitsServer = serverFull.substring(5, serverFull.indexOf("/", 5));
-  if (lnbitsServer.length() == 0) {
-    Serial.println(F("Fatal: Unable to get lnbits server address!"));
-    return false;
-  }
-  Serial.print(F("Server hostname: "));
-  Serial.println(lnbitsServer);
-  
-  deviceId = serverFull.substring(serverFull.length() - 22);
-  if (deviceId.length() == 0) {
-    Serial.println(F("Fatal: Unable to get deviceId!"));
-    return false;
-  }  
-  Serial.print(F("Device ID: "));
-  Serial.println(deviceId);
-
-  const JsonObject maRoot4 = doc[4];
-  const char *maRoot4Char = maRoot4["value"];
-  lnurl = maRoot4Char;
-  Serial.print(F("LNURL: "));
-  Serial.println(lnurl);
-  
-  paramFile.close();
-  return true;
-}
-
 //////////////////WEBSOCKET///////////////////
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
@@ -272,95 +204,6 @@ void notificaAwtrix(String mensagem) {
   http.end();
 }
 
-void removeFile(String path) {
-  Serial.println("removeFile: " + path);
-  LittleFS.remove("/" + path);
-}
-
-void appendToFile(String path, String data) {
-  Serial.println("appendToFile: " + path);
-  Serial.println("data: " + data);
-  File file = LittleFS.open("/" + path, "a");
-  if (!file) {
-    file = LittleFS.open("/" + path, "w");
-    Serial.println("Criando!");
-  }
-  if (file) {    
-    file.print(data);
-    delay(1000);
-    file.close();
-    Serial.println("Feito!");
-  }
-}
-
-void readFile(String path) {
-  Serial.println("readFile: " + path);
-  File file = LittleFS.open("/" + path, "r");
-  if (file) {
-    while (file.available()) {
-      String line = file.readStringUntil('\n');
-      Serial.println("/file-read " + line);
-    }
-    file.close();
-  }
-  Serial.println("");
-  Serial.println("/file-done");
-}
-
-KeyValue extractKeyValue(String s) {
-  int spacePos = s.indexOf(" ");
-  String key = s.substring(0, spacePos);
-  if (spacePos == -1) {
-    return {key, ""};
-  }
-  String value = s.substring(spacePos + 1, s.length());
-  return {key, value};
-}
-
-void executeCommand(String commandName, String commandData) {
-  Serial.println("executeCommand: " + commandName + " > " + commandData);
-  KeyValue 
-  kv = extractKeyValue(commandData);
-  String path = kv.key;
-  String data = kv.value;
-
-  if (commandName == "/file-remove") {
-    return removeFile(path);
-  }
-  if (commandName == "/file-append") {
-    return appendToFile(path, data);
-  }
-
-  if (commandName == "/file-read") {
-    Serial.println("prepare to read");
-    readFile(path);
-    Serial.println("readFile done");
-    return;
-  }
-
-  Serial.println("command unknown");
-}
-
-void executeConfig() {
-  
-  while (true) {
-    if (Serial.available() == 0) continue;
-    String data = Serial.readStringUntil('\n');
-    Serial.println("received: " + data);
-    KeyValue kv = extractKeyValue(data);
-    String commandName = kv.key;
-    if (commandName == "/config-done") {
-      Serial.println("/config-done");
-      return;
-    }
-    executeCommand(commandName, kv.value);
-  }
-}
-
-void configOverSerialPort() {
-  executeConfig();
-}
-
 void efeitosLeds()
 {
     colorWipe(strip.Color(255, 0, 0), 50); // Red
@@ -386,6 +229,7 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println(F("\n\nBOOT!")); 
+
   // Ajusta leds
   strip.begin();
   strip.setBrightness(50);
@@ -396,48 +240,11 @@ void setup()
   pinMode (LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
-  LittleFSConfig cfg;
-  cfg.setAutoFormat(true);
-  LittleFS.setConfig(cfg);
-  LittleFS.begin();
-
-  // get the saved details and store in global variables
-  if (readFiles()) {
-    Serial.println("Configuração lida");
-    //Serial.println(lnbitsServer+lnbitsWSApiURL+deviceId);
-  } else {
-    Serial.println("USB triggered");
-    configOverSerialPort();
-    Serial.println("Esperado: ws://legend.lnbits.com/api/v1/ws/YZEm59X5MvNCYYZkfLTZar");
-    lnbitsServer = "legend.lnbits.com";
-    lnbitsWSApiURL = "/api/v1/ws/";
-    deviceId = "YZEm59X5MvNCYYZkfLTZar";
-  }
-
-  WiFi.persistent(false);
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  WiFi.begin((char*)ssid.c_str(), (char*)wifiPassword.c_str());
-
-  int timer = 0;  
-  while (WiFi.status() != WL_CONNECTED && timer < 8000) {
-    delay(1000);
-    Serial.print(".");
-    timer = timer + 1000;
-    if(timer > 60000){
-      triggerUSB = true;
-    }
-  }    
-
-  // Configurar arquivos via USB
-  // triggerUSB = true;
-  if (triggerUSB == true)
-  {
-    Serial.println("USB triggered");
-    configOverSerialPort();
-  }
-    // Conectado, da um showzinho...        
-    theaterChase(strip.Color(255, 127, 0), 30); // Red    
+  #ifdef PIN_BUTTON_1
+  button1.attachLongPressStart(reset_configuration);
+  #endif
+  
+  init_WifiManager();
 
   // Serial.println(lnbitsServer + lnbitsWSApiURL + deviceId);
   webSocket.beginSSL(lnbitsServer.c_str(), 443, (lnbitsWSApiURL + deviceId).c_str());
