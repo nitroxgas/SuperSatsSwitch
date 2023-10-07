@@ -5,46 +5,59 @@
 #include <WebSocketsClient.h> 
 #include <ArduinoJson.h> 
 #include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecureBearSSL.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
+
 #include "wManager.h"
+//#include "lnpay.h"
+
+extern char wsApiURL[80];
+extern char wsServer[80];
+extern char wsApiKey[37];
+extern char wsWalletKey[37];
+
+extern unsigned long relay1Sats;
+extern unsigned long relay2Sats;
+extern unsigned char relay1pulses;
+extern unsigned char relay2pulses;
+extern unsigned char relay1timeS;
+extern unsigned char relay2timeS;
+extern unsigned char relay1Pin;
+extern unsigned char relay2Pin;
 
 #ifdef PIN_BUTTON_1
   #include  <OneButton.h>
   OneButton button1(PIN_BUTTON_1);
 #endif
 
-#define PARAM_FILE "/elements.json"
-
 /////////////////////////////////
 /////////// LEDS ////////////////
 /////////////////////////////////
-
 #include <Adafruit_NeoPixel.h>
-
 #define PIN 5
-
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(16, PIN, NEO_GRB + NEO_KHZ800);
 
-const uint32_t WS_RECONNECT_INTERVAL = 10000;  // websocket reconnect interval (ms)
-const uint32_t WS_HB_PING_TIME = 15000;          // ping server every WS_HB_PING_TIME ms (set to 0 to disable heartbeat)
-const uint32_t WS_HB_PONG_WITHIN = 10000;        // expect pong from server within WS_HB_PONG_WITHIN ms
-const uint32_t WS_HB_PONGS_MISSED = 3;             // consider connection disconnected if pong is not received WS_HB_PONGS_MISSED times
-
-/////////////////////////////////
-/////////////////////////////////
-/////////////////////////////////
-
-String payloadStr;
-String password;
+// String payloadStr;
+/* String password;
 String serverFull;
-String lnbitsServer;
-String lnbitsWSApiURL;
+String lnpayServer;
+String lnpayWSApiURL;
 String ssid;
 String wifiPassword;
 String deviceId;
 String highPin;
 String timePin;
+String lnurl; */
+
+//Change the pin logic
 String pinFlip = "true";
-String lnurl;
+
+/* struct KeyValue {
+  String key;
+  String value;
+}; */
 
 bool paid = false;
 bool connerr = true;
@@ -52,13 +65,71 @@ bool triggerUSB = false;
 
 bool showconnect = true;
 
-WebSocketsClient webSocket;
+typedef struct{
+  String message;
+  char id[28];
+  int num_satoshis;
+  unsigned long time; 
+}last_message;
 
-struct KeyValue {
-  String key;
-  String value;
-};
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 3600, 60000);
+unsigned long start = millis();
+const char* ntpServer = "pool.ntp.org";
+
 //////////////////HELPERS///////////////////
+
+String consultaWallet(String walletkey, String accessKey) {
+   
+  BearSSL::WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;  
+  // ex.: http://api.lnpay.co/v1/wallet/wakr_Bg3drZJcpy0pOcAqTJftHUm/transactions?fields=num_satoshis,created_at,type,message,passThru
+
+  const String url = wsServer;
+  const String path = wsApiURL + walletkey + "/transactions?page=1&per-page=5&fields=id,user_label,num_satoshis,created_at,passThru";                               
+  
+  Serial.println("https://"+url+path);
+  http.begin(client, url, 443, path); // Iniciar a conexão HTTPS
+  http.addHeader("X-Api-Key", accessKey);
+
+  int httpResponseCode = http.GET(); // Enviar a requisição GET
+
+  if (httpResponseCode == 200) {
+    String payload = http.getString(); // Obter a resposta da requisição    
+    StaticJsonDocument<200> filter;
+    filter[0]["id"] = true;
+    filter[0]["created_at"] = true; 
+    filter[0]["num_satoshis"] = true;
+    filter[0]["user_label"] = true;   
+    filter[0]["passThru"]["type"] = true;
+    filter[0]["passThru"]["message"] = true;
+
+    DynamicJsonDocument doc(2048);
+    DeserializationError error = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
+    // serializeJsonPretty(doc, Serial);
+    if (error) {
+        Serial.print("Erro ao fazer o parse do JSON: ");
+        Serial.println(error.c_str());
+        //return;
+    } else {
+        // Imprime JSON
+        serializeJsonPretty(doc, Serial);
+    }
+    //Serial.println(payload);
+    http.end();
+    return payload.c_str();
+
+  } else {
+    Serial.print("Erro na requisição, código de resposta: ");
+    Serial.println(httpResponseCode);
+    Serial.println(http.errorToString(httpResponseCode).c_str());
+    http.end();
+    return "Erro";
+  }
+  Serial.println("Encerrou");
+  http.end(); // Fechar a conexão HTTP
+}
 
 // Fill the dots one after the other with a color
 void colorWipe(uint32_t c, uint8_t wait) 
@@ -90,83 +161,22 @@ void theaterChase(uint32_t c, uint8_t wait) {
 
 void onOff()
 { 
-  pinMode (highPin.toInt(), OUTPUT);
+  pinMode (relay1Pin, OUTPUT);
   if(pinFlip == "true"){
-    digitalWrite(highPin.toInt(), LOW);
-    delay(timePin.toInt());
-    digitalWrite(highPin.toInt(), HIGH); 
+    digitalWrite(relay1Pin, LOW);
+    delay(relay1timeS);
+    digitalWrite(relay1Pin, HIGH); 
     //delay(2000);
   }
   else{
-    digitalWrite(highPin.toInt(), HIGH);
-    delay(timePin.toInt());
-    digitalWrite(highPin.toInt(), LOW); 
+    digitalWrite(relay1Pin, HIGH);
+    delay(relay1timeS);
+    digitalWrite(relay1Pin, LOW); 
     //delay(2000);
   }
 }
 
-String getValue(String data, char separator, int index)
-{
-    int found = 0;
-    int strIndex[] = { 0, -1 };
-    int maxIndex = data.length() - 1;
-
-    for (int i = 0; i <= maxIndex && found <= index; i++) {
-        if (data.charAt(i) == separator || i == maxIndex) {
-            found++;
-            strIndex[0] = strIndex[1] + 1;
-            strIndex[1] = (i == maxIndex) ? i+1 : i;
-        }
-    }
-    return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
-}
-
-//////////////////WEBSOCKET///////////////////
-void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
-    switch(type) {
-        case WStype_DISCONNECTED:
-            //Serial.println(F("[WSc] Disconnected!"));
-            Serial.printf("[WSc] Disconnected to url: %s\n",  payload);
-            connerr = true;
-            showconnect = true;
-            break;
-        case WStype_CONNECTED:
-            {
-            Serial.printf("[WSc] Connected to url: %s\n",  payload);
-			      webSocket.sendTXT("Connected");
-            connerr = false;
-            #ifdef USELCD
-              showqr = true;
-            #endif  
-            }
-            break;
-        case WStype_TEXT:
-            payloadStr = (char*)payload;
-            paid = true;
-            break;
-        case WStype_PING:
-            // pong will be send automatically
-            //Serial.println("[WSc] ping received");
-            Serial.print("ping ");
-            break;
-        case WStype_PONG:
-            // answer to a ping we send
-            //Serial.println("[WSc] pong received");
-            Serial.print("pong ");
-            break;    
-    		case WStype_ERROR:
-        // answer to a ping we send
-            Serial.println("[WSc] error received");
-            break; 			
-    		case WStype_FRAGMENT_TEXT_START:
-    		case WStype_FRAGMENT_BIN_START:
-    		case WStype_FRAGMENT:
-        case WStype_BIN:
-    		case WStype_FRAGMENT_FIN:
-    			break;
-    }
-}
-
+#ifdef AWTRIX
 void notificaAwtrix(String mensagem) {
   // Criar o JSON payload
   StaticJsonDocument<256> jsonPayload;
@@ -203,6 +213,7 @@ void notificaAwtrix(String mensagem) {
 
   http.end();
 }
+#endif
 
 void efeitosLeds()
 {
@@ -227,61 +238,20 @@ void desligaLeds()
 
 void setup()
 {
-  Serial.begin(115200);
-  Serial.println(F("\n\nBOOT!")); 
+ Serial.begin(115200);
+ init_WifiManager();
 
-  // Ajusta leds
-  strip.begin();
-  strip.setBrightness(50);
-  strip.show(); // Initialize all pixels to 'off'
-  // Iniciando configuração...
-  theaterChase(strip.Color(127, 0, 0), 50); // Red 
-  //turn off onboard led (usually gpio 2)
-  pinMode (LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
-
-  #ifdef PIN_BUTTON_1
-  button1.attachLongPressStart(reset_configuration);
-  #endif
-  
-  init_WifiManager();
-
-  // Serial.println(lnbitsServer + lnbitsWSApiURL + deviceId);
-  webSocket.beginSSL(lnbitsServer.c_str(), 443, (lnbitsWSApiURL + deviceId).c_str());
-  webSocket.onEvent(webSocketEvent);
-  webSocket.setReconnectInterval(WS_RECONNECT_INTERVAL);
-  if (WS_HB_PING_TIME != 0) {
-    /* Serial.print(F("Enabling WS heartbeat with ping time "));
-    Serial.print(WS_HB_PING_TIME);
-    Serial.print(F("ms, pong time "));
-    Serial.print(WS_HB_PONG_WITHIN);
-    Serial.print(F("ms, "));
-    Serial.print(WS_HB_PONGS_MISSED);
-    Serial.println(F(" missed pongs to reconnect.")); */
-    webSocket.enableHeartbeat(WS_HB_PING_TIME, WS_HB_PONG_WITHIN, WS_HB_PONGS_MISSED);
-  }
+ #ifdef AWTRIX
   // Finalizou configuração - anuncia AwTrix
   notificaAwtrix("SWITCH! INICIADO!");
-
-  // Desliga leds depois de configurado o WS
-  desligaLeds();
+ #endif
 }
 
 void loop() {
-    
-  webSocket.loop();
-    
-  if(paid){
-    paid = false;
-    Serial.println("Paid");
-    Serial.println(payloadStr);
-    highPin = getValue(payloadStr, '-', 0);
-    Serial.println(highPin);
-    timePin = getValue(payloadStr, '-', 1);
-    Serial.println(timePin);    
-    notificaAwtrix("PAGAMENTO RECEBIDO - SATOSHIS NA CONTA!");
-    efeitosLeds();
-    onOff();  
-    desligaLeds();       
+  if(WiFi.status()== WL_CONNECTED){
+    //Serial.println(consultaWallet("wal_7ihvT2Bnkq6UYi","sak_Tsg8JM8k5ImYIDhD3DciiFUPPM56"));
+    consultaWallet("wakr_Bg3drZJcpy0pOcAqTJftHUm","pak_FrrLdOMTbQhSz64kllVvs3FoL57rrPYG");
+    delay(5*1000);
+    Serial.println(ESP.getFreeHeap());
   }
 }
