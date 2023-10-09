@@ -21,8 +21,9 @@ This is a free and open source project!
     - Wifi credentials;
     - The LNPay server; (or leave the deault)
     - The LNPay API path; (or leave the default)
-    - Your wallet public key; ( starts with pak_)
-    - Your wallet read key; ( starts with wakr_)
+    - Your wallet public key; (starts with pak_ )
+    - Your wallet read key; (starts with wakr_ )
+    - Relay 1 pin; (wich digital pin should be used)
     - Relay 1 Sats; (minimal amount of sats received to activate the realy)
     - Relay 1 Time; (How much time in seconds the relay need to be activated)
     - Relay 1 pulse; (How many times the activation should be repeated - not yet...)
