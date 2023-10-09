@@ -1,5 +1,5 @@
 # SuperSatsSwitch
-**SuperSatsSwitch - A IoT switch to SuperSats.tv or LNPay wallets.**
+**SuperSatsSwitch - An IoT switch to SuperSats.tv or LNPay wallets.**
 
 As you get satoshis from the audience, you may turn on anything you want, including lighting, articulated dolls, and other real-world things, using a switch similar to the BitcoinSwitch.
 
@@ -14,6 +14,9 @@ This is a free and open source project!
 
 - Compile and upload the code using VSCode with Platformio;
 - Access the device portal with a cellphone or other wifi-enabled device;
+    - SSID: SuperSatsSwitch
+    - Password: MineYourCoins
+
 - Enter the needed information:
     - Wifi credentials;
     - The LNPay server; (or leave the deault)
