@@ -340,8 +340,8 @@ void init_WifiManager()
     Serial.println(wsApiURL);
 
     strncpy(wsWalletKey, wswallet_text_box.getValue(), sizeof(wsWalletKey));
-    Serial.print("Wallet API Key: ");
-    Serial.println(wsApiKey);
+    Serial.print("Wallet Read Key: ");
+    Serial.println(wsWalletKey);
 
     strncpy(wsApiKey, wsapikey_text_box.getValue(), sizeof(wsApiKey));
     Serial.print("Wallet API Key: ");
