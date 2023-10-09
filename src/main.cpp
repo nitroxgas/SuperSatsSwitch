@@ -18,6 +18,7 @@ extern char wsServer[80];
 extern char wsApiKey[37];
 extern char wsWalletKey[37];
 
+
 extern unsigned long relay1Sats;
 extern unsigned long relay2Sats;
 extern unsigned char relay1pulses;
@@ -52,32 +53,138 @@ String timePin;
 String lnurl; */
 
 //Change the pin logic
-String pinFlip = "true";
+//bool pinFlip = true;
 
-/* struct KeyValue {
-  String key;
-  String value;
-}; */
-
-bool paid = false;
-bool connerr = true;
-bool triggerUSB = false;
-
-bool showconnect = true;
+char fails = 0;
 
 typedef struct{
   String message;
-  char id[28];
-  int num_satoshis;
-  unsigned long time; 
+  String id;
+  unsigned long num_satoshis;
+  unsigned long time = 0; 
 }last_message;
 
+last_message lastMessage;
+
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 3600, 60000);
-unsigned long start = millis();
-const char* ntpServer = "pool.ntp.org";
+NTPClient timeClient(ntpUDP, "pool.ntp.org"); //, 0, 60000);
+unsigned long start; 
+//unsigned long lastMessage;
+//const char* ntpServer = "pool.ntp.org";
 
 //////////////////HELPERS///////////////////
+#ifdef AWTRIX
+extern char awtrixServer[80];
+
+void notificaAwtrix(String mensagem, int repeat) {
+  // Criar o JSON payload
+  StaticJsonDocument<256> jsonPayload;
+  jsonPayload["text"] = mensagem;
+  jsonPayload["color"] = "#FFA500";
+  jsonPayload["repeat"] = repeat;
+  jsonPayload["wakeup"] = true;
+  jsonPayload["duration"] = 20;
+  jsonPayload["icon"] = "630";
+  jsonPayload["pushIcon"] = 2;
+  
+  // Serializar o JSON para uma string
+  String payload;
+  serializeJson(jsonPayload, payload);
+  //Serial.println(payload);
+
+  // Fazer a requisição POST
+  WiFiClient wifi;
+  HTTPClient http;
+  String awserver = "http://"+String(awtrixServer)+"/api/notify";
+  http.begin(wifi, awserver);
+  http.addHeader("Content-Type", "application/json");  
+  
+  int httpResponseCode = http.POST(payload);
+
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.print("Awtrix: ");
+    Serial.println(response);
+  } else {
+    Serial.print("Error, response code: ");
+    Serial.println(httpResponseCode);
+    Serial.printf("[HTTP] POST... Failed, error: %s\n", http.errorToString(httpResponseCode).c_str());
+  }
+
+  http.end();
+}
+#endif
+
+unsigned char h2int(char c)
+{
+    if (c >= '0' && c <='9'){
+        return((unsigned char)c - '0');
+    }
+    if (c >= 'a' && c <='f'){
+        return((unsigned char)c - 'a' + 10);
+    }
+    if (c >= 'A' && c <='F'){
+        return((unsigned char)c - 'A' + 10);
+    }
+    return(0);
+}
+
+String urldecode(String str)
+{    
+    String encodedString="";
+    char c;
+    char code0;
+    char code1;
+    for (unsigned int i =0; i < str.length(); i++){
+        c=str.charAt(i);
+      if (c == '+'){
+        encodedString+=' ';  
+      }else if (c == '%') {
+        i++;
+        code0=str.charAt(i);
+        i++;
+        code1=str.charAt(i);
+        c = (h2int(code0) << 4) | h2int(code1);
+        encodedString+=c;
+      } else{
+        
+        encodedString+=c;  
+      }
+      
+      yield();
+    }
+    
+   return encodedString;
+}
+
+void onOff(char relayP, int timeP, bool pinFlip )
+{ 
+  pinMode (relayP, OUTPUT);
+  if(pinFlip){
+    digitalWrite(relayP, LOW);
+    delay(timeP*1000);
+    digitalWrite(relayP, HIGH);     
+  }
+  else {
+    digitalWrite(relayP, HIGH);
+    delay(timeP*1000);
+    digitalWrite(relayP, LOW);     
+  }
+}
+
+// Do something when a valid message is received
+void doStuff(){
+  #ifdef AWTRIX
+    notificaAwtrix(lastMessage.message, 1);
+  #endif
+
+  if (lastMessage.num_satoshis>=relay1Sats){
+    onOff(relay1Pin, relay1timeS, true);
+  }
+  if (lastMessage.num_satoshis>=relay2Sats){
+   onOff(relay2Pin, relay2timeS, true);
+  }
+}
 
 String consultaWallet(String walletkey, String accessKey) {
    
@@ -90,6 +197,8 @@ String consultaWallet(String walletkey, String accessKey) {
   const String path = wsApiURL + walletkey + "/transactions?page=1&per-page=5&fields=id,user_label,num_satoshis,created_at,passThru";                               
   
   Serial.println("https://"+url+path);
+  //Serial.println(accessKey);
+  
   http.begin(client, url, 443, path); // Iniciar a conexão HTTPS
   http.addHeader("X-Api-Key", accessKey);
 
@@ -112,11 +221,26 @@ String consultaWallet(String walletkey, String accessKey) {
         Serial.print("Erro ao fazer o parse do JSON: ");
         Serial.println(error.c_str());
         //return;
-    } else {
-        // Imprime JSON
-        serializeJsonPretty(doc, Serial);
+    } else {        
+        for (char i=doc.size(); i>0; i--){        
+          const JsonObject& mensagem = doc[i-1];                    
+   //       Caso seja mais recente que a hora de inicialização do SuSaSw       
+          unsigned long messCreated = mensagem["created_at"];          
+          if (( messCreated > start ) && (messCreated > lastMessage.time))
+            if ( (mensagem["user_label"].as<String>() == "supersats (via LNPAY.co)") || (mensagem["passThru"]["type"].as<String>() == "supersats")){ // If it's a SuperChat...                          
+              // serializeJsonPretty(mensagem, Serial);
+              Serial.printf("Start: %lu - Obj: %d - Created: %lu\n", start, i, mensagem["created_at"].as<long>());
+              lastMessage.id = mensagem["id"].as<String>();
+              lastMessage.time = mensagem["created_at"].as<long>();
+              lastMessage.message = urldecode(mensagem["passThru"]["message"].as<String>());                            
+              lastMessage.num_satoshis = mensagem["num_satoshis"].as<int>();
+              Serial.println(lastMessage.message);
+              doStuff();
+            }
+        }
     }
     //Serial.println(payload);
+    fails=0;
     http.end();
     return payload.c_str();
 
@@ -125,6 +249,8 @@ String consultaWallet(String walletkey, String accessKey) {
     Serial.println(httpResponseCode);
     Serial.println(http.errorToString(httpResponseCode).c_str());
     http.end();
+    fails++;
+    if (fails>5) ESP.restart();
     return "Erro";
   }
   Serial.println("Encerrou");
@@ -159,62 +285,6 @@ void theaterChase(uint32_t c, uint8_t wait) {
   }
 }
 
-void onOff()
-{ 
-  pinMode (relay1Pin, OUTPUT);
-  if(pinFlip == "true"){
-    digitalWrite(relay1Pin, LOW);
-    delay(relay1timeS);
-    digitalWrite(relay1Pin, HIGH); 
-    //delay(2000);
-  }
-  else{
-    digitalWrite(relay1Pin, HIGH);
-    delay(relay1timeS);
-    digitalWrite(relay1Pin, LOW); 
-    //delay(2000);
-  }
-}
-
-#ifdef AWTRIX
-void notificaAwtrix(String mensagem) {
-  // Criar o JSON payload
-  StaticJsonDocument<256> jsonPayload;
-  jsonPayload["text"] = mensagem;
-  jsonPayload["color"] = "#FFA500";
-  jsonPayload["repeat"] = 3;
-  jsonPayload["wakeup"] = true;
-  jsonPayload["duration"] = 20;
-  jsonPayload["icon"] = "630";
-  jsonPayload["pushIcon"] = 2;
-  
-  // Serializar o JSON para uma string
-  String payload;
-  serializeJson(jsonPayload, payload);
-  //Serial.println(payload);
-
-  // Fazer a requisição POST
-  WiFiClient wifi;
-  HTTPClient http;
-  http.begin(wifi, "http://192.168.1.76/api/notify");
-  http.addHeader("Content-Type", "application/json");  
-  
-  int httpResponseCode = http.POST(payload);
-
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    Serial.print("Resposta do Awtrix: ");
-    Serial.println(response);
-  } else {
-    Serial.print("Erro na requisição, código de resposta: ");
-    Serial.println(httpResponseCode);
-    Serial.printf("[HTTP] POST... falhou, erro: %s\n", http.errorToString(httpResponseCode).c_str());
-  }
-
-  http.end();
-}
-#endif
-
 void efeitosLeds()
 {
     colorWipe(strip.Color(255, 0, 0), 50); // Red
@@ -240,18 +310,34 @@ void setup()
 {
  Serial.begin(115200);
  init_WifiManager();
+ timeClient.begin();
+ // Find if offset time is needed 
+ //timeClient.setTimeOffset(3600 * -3);
+ 
+ if(timeClient.update()) start = timeClient.getEpochTime(); 
+ 
+ Serial.print("Inicio:");
+ Serial.println(start);
 
  #ifdef AWTRIX
   // Finalizou configuração - anuncia AwTrix
-  notificaAwtrix("SWITCH! INICIADO!");
+  notificaAwtrix("SuperSats SWITCH! INICIADO!",2);
  #endif
 }
 
+unsigned long currentTime = 0;
+unsigned long mTriggerUpdate = 0;
+
 void loop() {
-  if(WiFi.status()== WL_CONNECTED){
-    //Serial.println(consultaWallet("wal_7ihvT2Bnkq6UYi","sak_Tsg8JM8k5ImYIDhD3DciiFUPPM56"));
-    consultaWallet("wakr_Bg3drZJcpy0pOcAqTJftHUm","pak_FrrLdOMTbQhSz64kllVvs3FoL57rrPYG");
-    delay(5*1000);
-    Serial.println(ESP.getFreeHeap());
+  if(WiFi.status()== WL_CONNECTED){          
+    if(timeClient.update()){
+       mTriggerUpdate = millis();
+       currentTime = timeClient.getEpochTime(); 
+       //Serial.print("Time:");
+       //Serial.println(currentTime);
+    }
+    consultaWallet(wsWalletKey, wsApiKey);
+    delay(5*1000);    
+    //Serial.println(ESP.getFreeHeap());
   }
 }

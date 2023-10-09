@@ -14,9 +14,11 @@ bool shouldSaveConfig = false;
 // Variables to hold data from custom textboxes
 char wsApiURL[80] = "/v1/wallet/";
 char wsServer[80] = "api.lnpay.co";
-char wsApiKey[37] = "pak_FrrLdOMTbQhSz64kllVvs3FoL57rrPYG";// "pak_***";
-char wsWalletKey[37] = "wakr_Bg3drZJcpy0pOcAqTJftHUm"; //"wakr_***";
-
+char wsApiKey[37] = "pak_***";
+char wsWalletKey[37] = "wakr_***";
+#ifdef AWTRIX
+  char awtrixServer[80] = "awtrix_####.local or IP";
+#endif
 unsigned long relay1Sats = 100;
 unsigned long relay2Sats = 2000;
 unsigned char relay1pulses = 1;
@@ -41,7 +43,10 @@ void saveConfigFile()
   json["wsapikey"] = wsApiKey;
   json["wsapiurl"] = wsApiURL;
   json["wsserver"] = wsServer;
-  json["wswalletKey"] = wsWalletKey;
+  json["wswalletkey"] = wsWalletKey;
+  #ifdef AWTRIX
+  json["awserver"] = awtrixServer;
+  #endif
   json["relay1sats"] = relay1Sats;
   json["relay1pulses"] = relay1pulses;
   json["relay1times"] = relay1timeS;
@@ -101,7 +106,10 @@ bool loadConfigFile()
           strcpy(wsApiKey, json["wsapikey"] | wsApiKey );
           strcpy(wsApiURL, json["wsapiurl"] | wsApiURL );
           strcpy(wsServer, json["wsserver"] | wsServer );
-          strcpy(wsWalletKey,json["wswalletkey"] | wsWalletKey);          
+          strcpy(wsWalletKey,json["wswalletkey"] | wsWalletKey);    
+          #ifdef AWTRIX
+          strcpy(awtrixServer, json["awserver"] | awtrixServer );
+          #endif      
           relay1Sats = json["relay1sats"].as<long>();
           relay1pulses = json["relay1pulses"].as<int>();
           relay1timeS = json["relay1times"].as<int>();
@@ -156,7 +164,7 @@ void init_WifiManager()
 {
   // Change to true when testing to force configuration every time we run
   bool forceConfig = false;
-
+  
   // Explicitly set WiFi mode
   WiFi.mode(WIFI_STA);
 
@@ -167,9 +175,11 @@ void init_WifiManager()
     forceConfig = true;    
   }
   
-  Serial.println("Carregando aqui...");
-  Serial.flush();
-  
+  if (!digitalRead(0)) {
+        Serial.println(F("Button pressed to force start config mode"));
+        forceConfig = true;
+        wm.setBreakAfterConfig(true); //Set to detect config edition and save
+  }
   // Reset settings (only for development)
   //wm.resetSettings();
 
@@ -203,21 +213,32 @@ void init_WifiManager()
 
   WiFiManagerParameter wswallet_text_box("wswalletkey", "LNPay Wallet (war_***)", wsWalletKey, 80);
 
-  WiFiManagerParameter wsapikey_text_box("wsapikey", "LNPay API Key", wsApiKey, 30);
+  WiFiManagerParameter wsapikey_text_box("wsapikey", "LNPay API Key", wsApiKey, 40);
 
   WiFiManagerParameter wsapiurl_text_box("wsapiurl", "LNPay URL", wsApiURL, 80);
   
   WiFiManagerParameter wsserver_text_box("wsserver", "LNPay Server", wsServer, 80);
+  
+  #ifdef AWTRIX
+  WiFiManagerParameter awserver_text_box("awserver", "Awtrix address", awtrixServer, 80);
+  #endif
+ 
+//  WiFiManagerParameter features_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Features</label>");
+//  wm.addParameter(&features_html);
 
   // Add all defined parameters  
   wm.addParameter(&wswallet_text_box);
   wm.addParameter(&wsapikey_text_box);
   wm.addParameter(&wsserver_text_box);  
   wm.addParameter(&wsapiurl_text_box);  
+  #ifdef AWTRIX
+    wm.addParameter(&awserver_text_box);  
+  #endif
   wm.addParameter(&r1s_text_box_num);
   wm.addParameter(&r1p_text_box_num);
   wm.addParameter(&r1t_text_box_num);
   wm.addParameter(&r1pin_text_box_num);
+  
 
   Serial.println(F("AllDone: "));
   if (forceConfig)
@@ -248,13 +269,19 @@ void init_WifiManager()
       Serial.print("LNPay Server: ");
       Serial.println(wsServer);
 
+#ifdef AWTRIX
+      strncpy(awtrixServer, awserver_text_box.getValue(), sizeof(awtrixServer));
+      Serial.print("Awtrix: ");
+      Serial.println(awtrixServer);
+#endif
+
       strncpy(wsApiURL, wsapiurl_text_box.getValue(), sizeof(wsApiURL));
       Serial.print("LNPay API URL: ");
       Serial.println(wsApiURL);
 
       strncpy(wsWalletKey, wswallet_text_box.getValue(), sizeof(wsWalletKey));
-      Serial.print("Wallet API Key: ");
-      Serial.println(wsApiKey);
+      Serial.print("Wallet Key: ");
+      Serial.println(wsWalletKey);
 
       strncpy(wsApiKey, wsapikey_text_box.getValue(), sizeof(wsApiKey));
       Serial.print("Wallet API Key: ");
@@ -319,6 +346,13 @@ void init_WifiManager()
     strncpy(wsApiKey, wsapikey_text_box.getValue(), sizeof(wsApiKey));
     Serial.print("Wallet API Key: ");
     Serial.println(wsApiKey);
+
+#ifdef AWTRIX
+    strncpy(awtrixServer, awserver_text_box.getValue(), sizeof(awtrixServer));
+    Serial.print("Awtrix: ");
+    Serial.println(awtrixServer);
+#endif    
+
   }
   
   // Save the custom parameters to FS
