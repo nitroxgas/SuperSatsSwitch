@@ -31,12 +31,12 @@ This is a free and open source project!
 The current version was tested with a Nodemcu - ESP8266
 
 TO-DO:
-> Polish the code. B'p
-> Finish the installation instructions.
-> Implement one more relay.
-> Polish the documentation.
-> Publish a binary and portal for an easier installation process.
-> ....
+- Polish the code. B'p
+- Finish the installation instructions.
+- Implement one more relay.
+- Polish the documentation.
+- Publish a binary and portal for an easier installation process.
+- ....
 
 
 ### Heavily inspired by:
