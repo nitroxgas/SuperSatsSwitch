@@ -323,8 +323,10 @@ void setup()
  
  Serial.print("Inicio:");
  Serial.println(start);
+ 
  pinMode(relay1Pin, OUTPUT);
  digitalWrite(relay1Pin, HIGH);
+
  #ifdef AWTRIX
   notificaAwtrix("SuperSats SWITCH! Started!",2);
  #endif

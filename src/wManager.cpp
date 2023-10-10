@@ -164,7 +164,10 @@ void init_WifiManager()
 {
   // Change to true when testing to force configuration every time we run
   bool forceConfig = false;
-  
+
+  // Fix the state of reset_pin, avoid floating pin
+  pinMode(RESET_PIN, INPUT_PULLUP);
+
   // Explicitly set WiFi mode
   WiFi.mode(WIFI_STA);
 
@@ -174,8 +177,8 @@ void init_WifiManager()
     Serial.println(F("Forcing config mode as there is no saved config"));
     forceConfig = true;    
   }
-  
-  if (!digitalRead(0)) {
+
+  if (!digitalRead(RESET_PIN)) { // Pin forces config.
         Serial.println(F("Button pressed to force start config mode"));
         forceConfig = true;
         wm.setBreakAfterConfig(true); //Set to detect config edition and save
@@ -219,26 +222,42 @@ void init_WifiManager()
   
   WiFiManagerParameter wsserver_text_box("wsserver", "LNPay Server", wsServer, 80);
   
-  #ifdef AWTRIX
-  WiFiManagerParameter awserver_text_box("awserver", "Awtrix address", awtrixServer, 80);
-  #endif
- 
+  WiFiManagerParameter lbl1_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">LNPay Wallet read key (wakr_***)</label>");
+  WiFiManagerParameter lbl2_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">LNPay Public Key (pak_***)</label>");
+  WiFiManagerParameter lbl3_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">LNPay Server</label>");
+  WiFiManagerParameter lbl4_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">LNPay api path</label>");
+  WiFiManagerParameter lbl5_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Sats to activate</label>");
+  WiFiManagerParameter lbl6_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Relay pin</label>");
+  WiFiManagerParameter lbl7_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Relay time active (s)</label>");
+  WiFiManagerParameter lbl8_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Relay activation per message</label>");
+  
+
 //  WiFiManagerParameter features_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Features</label>");
 //  wm.addParameter(&features_html);
 
   // Add all defined parameters  
+  wm.addParameter(&lbl1_html);
   wm.addParameter(&wswallet_text_box);
+  wm.addParameter(&lbl2_html);
   wm.addParameter(&wsapikey_text_box);
+  wm.addParameter(&lbl3_html);
   wm.addParameter(&wsserver_text_box);  
+  wm.addParameter(&lbl4_html);
   wm.addParameter(&wsapiurl_text_box);  
-  #ifdef AWTRIX
-    wm.addParameter(&awserver_text_box);  
-  #endif
+  wm.addParameter(&lbl5_html);
   wm.addParameter(&r1s_text_box_num);
+  wm.addParameter(&lbl8_html);
   wm.addParameter(&r1p_text_box_num);
+  wm.addParameter(&lbl7_html);
   wm.addParameter(&r1t_text_box_num);
+  wm.addParameter(&lbl6_html);
   wm.addParameter(&r1pin_text_box_num);
-  
+ #ifdef AWTRIX
+  WiFiManagerParameter awserver_text_box("awserver", "Awtrix address", awtrixServer, 80);
+  WiFiManagerParameter lbl9_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">AWTRIX Server</label>");
+  wm.addParameter(&lbl4_html);
+  wm.addParameter(&awserver_text_box);  
+ #endif 
 
   Serial.println(F("AllDone: "));
   if (forceConfig)
