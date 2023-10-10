@@ -182,6 +182,7 @@ String urldecode(String str)
    return encodedString;
 }
 
+#ifdef PUSH_BUTTON
 void onOff(char relayP, int timeP, int pulses, bool pinFlip )
 { 
   Serial.printf("Seconds:%d Pulses:%d\n", timeP, pulses); 
@@ -189,7 +190,34 @@ void onOff(char relayP, int timeP, int pulses, bool pinFlip )
   for (int i=0; i<pulses; i++){
     if(pinFlip){      
       digitalWrite(relayP, LOW);
+      delay(100);
+      digitalWrite(relayP, HIGH);  
       delay(timeP*1000);
+      digitalWrite(relayP, LOW);
+      delay(100);
+      digitalWrite(relayP, HIGH);  
+    }
+    else {            
+      digitalWrite(relayP, HIGH);
+      delay(100);
+      digitalWrite(relayP, LOW);
+      delay(timeP*1000);
+      digitalWrite(relayP, HIGH);     
+      delay(100);
+      digitalWrite(relayP, LOW);
+    }
+    delay(200);
+  }
+}
+#elif
+void onOff(char relayP, int timeP, int pulses, bool pinFlip )
+{ 
+  Serial.printf("Seconds:%d Pulses:%d\n", timeP, pulses); 
+  pinMode(relayP, OUTPUT);
+  for (int i=0; i<pulses; i++){
+    if(pinFlip){      
+      digitalWrite(relayP, LOW);       
+      delay(timeP*1000);      
       digitalWrite(relayP, HIGH);  
     }
     else {            
@@ -200,6 +228,7 @@ void onOff(char relayP, int timeP, int pulses, bool pinFlip )
     delay(200);
   }
 }
+#endif
 
 // Do something when a valid message is received
 void doStuff(){
@@ -294,7 +323,8 @@ void setup()
  
  Serial.print("Inicio:");
  Serial.println(start);
-
+ pinMode(relay1Pin, OUTPUT);
+ digitalWrite(relay1Pin, HIGH);
  #ifdef AWTRIX
   notificaAwtrix("SuperSats SWITCH! Started!",2);
  #endif
@@ -310,7 +340,7 @@ void loop() {
        currentTime = timeClient.getEpochTime(); 
     }
     consultaWallet(wsWalletKey, wsApiKey);
-    // onOff(relay1Pin, relay1timeS, 3, true);
+    //onOff(relay1Pin, 10, 2, true);
     delay(5*1000);  // Delay 5 seconds before new connection  
     //Serial.println(ESP.getFreeHeap());
   }
