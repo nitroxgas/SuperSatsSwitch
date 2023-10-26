@@ -99,7 +99,7 @@ bool loadConfigFile()
         StaticJsonDocument<512> json;
         DeserializationError error = deserializeJson(json, configFile);
         configFile.close();
-        serializeJsonPretty(json, Serial);
+        // serializeJsonPretty(json, Serial);
         if (!error)
         {
           Serial.println("Parsing JSON");
@@ -185,6 +185,8 @@ void init_WifiManager()
   }
   // Reset settings (only for development)
   //wm.resetSettings();
+
+  wm.setDebugOutput(false);
 
   // Set config save notify callback
   wm.setSaveConfigCallback(saveConfigCallback);

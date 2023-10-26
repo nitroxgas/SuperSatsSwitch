@@ -43,7 +43,7 @@ unsigned long start;
 /////////// LEDS ////////////////
 #ifdef LEDSTRIP
   #include <Adafruit_NeoPixel.h>
-  #define PIN 5
+  #define PIN 14
   Adafruit_NeoPixel strip = Adafruit_NeoPixel(16, PIN, NEO_GRB + NEO_KHZ800);
 #endif
 
@@ -323,12 +323,12 @@ void setup()
  
  Serial.print("Inicio:");
  Serial.println(start);
- 
+
  pinMode(relay1Pin, OUTPUT);
  digitalWrite(relay1Pin, HIGH);
 
  #ifdef AWTRIX
-  notificaAwtrix("SuperSats SWITCH! Started!",2);
+  notificaAwtrix("SuperSats SWITCH! Started!", 2);
  #endif
 }
 
@@ -336,14 +336,14 @@ unsigned long currentTime = 0;
 unsigned long mTriggerUpdate = 0;
 
 void loop() {
-  if(WiFi.status()== WL_CONNECTED){          
+  if(WiFi.status() == WL_CONNECTED){          
     if(timeClient.update()){
        mTriggerUpdate = millis();
        currentTime = timeClient.getEpochTime(); 
     }
-    consultaWallet(wsWalletKey, wsApiKey);
-    //onOff(relay1Pin, 10, 2, true);
+    consultaWallet(wsWalletKey, wsApiKey);    
     delay(5*1000);  // Delay 5 seconds before new connection  
+    //onOff(relay1Pin, 10, 2, true);
     //Serial.println(ESP.getFreeHeap());
   }
 }
